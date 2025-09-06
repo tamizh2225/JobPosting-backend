@@ -1,18 +1,15 @@
--- run this in MySQL
-CREATE DATABASE IF NOT EXISTS job_portal CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE job_portal;
+-- backend/schema.sql  (SQLite)
+PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS jobs (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  title VARCHAR(120) NOT NULL,
-  company VARCHAR(120) NOT NULL,
-  location VARCHAR(120) NOT NULL,
-  job_type ENUM('Full-time','Part-time','Contract','Internship') NOT NULL,
-  min_salary INT DEFAULT NULL,
-  max_salary INT DEFAULT NULL,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  company TEXT NOT NULL,
+  location TEXT NOT NULL,
+  job_type TEXT NOT NULL, -- values: 'Full-time','Part-time','Contract','Internship'
+  min_salary INTEGER,
+  max_salary INTEGER,
   description TEXT,
-  requirements TEXT,
-  responsibilities TEXT,
-  deadline DATE DEFAULT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  deadline TEXT,            -- store date as 'YYYY-MM-DD'
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

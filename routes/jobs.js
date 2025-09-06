@@ -1,37 +1,43 @@
+// backend/routes/jobs.js
 const express = require("express");
 const router = express.Router();
-const pool = require("../db");
+const db = require("../db");
 
-// GET /api/jobs  (with simple filters)
+// Helper to normalize query params safely
+const parseNumber = (v) => {
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+};
+
+// GET /api/jobs  (filters: q, location, type, salary)
 router.get("/", async (req, res) => {
   try {
-    const { q = "", location = "", type = "", min = "", max = "" } = req.query;
+    const { q = "", location = "", type = "", salary = "" } = req.query;
 
     let sql = `SELECT * FROM jobs WHERE 1=1`;
-    const params = {};
+    const params = [];
+
     if (q) {
-      sql += ` AND (title LIKE :q OR company LIKE :q)`;
-      params.q = `%${q}%`;
+      sql += ` AND (title LIKE ? OR company LIKE ?)`;
+      params.push(`%${q}%`, `%${q}%`);
     }
     if (location) {
-      sql += ` AND location = :location`;
-      params.location = location;
+      sql += ` AND location LIKE ?`;
+      params.push(`%${location}%`);
     }
     if (type) {
-      sql += ` AND job_type = :type`;
-      params.type = type;
+      sql += ` AND job_type = ?`;
+      params.push(type);
     }
-    if (min) {
-      sql += ` AND (min_salary IS NULL OR min_salary >= :min)`;
-      params.min = Number(min);
+    if (salary) {
+      const s = parseNumber(salary) || 0;
+      sql += ` AND (max_salary IS NOT NULL AND max_salary >= ?)`;
+      params.push(s);
     }
-    if (max) {
-      sql += ` AND (max_salary IS NULL OR max_salary <= :max)`;
-      params.max = Number(max);
-    }
+
     sql += ` ORDER BY created_at DESC`;
 
-    const [rows] = await pool.query({ sql, namedPlaceholders: true }, params);
+    const rows = await db.all(sql, params);
     res.json(rows);
   } catch (e) {
     console.error(e);
@@ -42,12 +48,13 @@ router.get("/", async (req, res) => {
 // GET /api/jobs/:id
 router.get("/:id", async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM jobs WHERE id = ?", [
+    const row = await db.get("SELECT * FROM jobs WHERE id = ?", [
       req.params.id,
     ]);
-    if (!rows.length) return res.status(404).json({ message: "Not found" });
-    res.json(rows[0]);
+    if (!row) return res.status(404).json({ message: "Not found" });
+    res.json(row);
   } catch (e) {
+    console.error(e);
     res.status(500).json({ message: "Failed to fetch job" });
   }
 });
@@ -63,8 +70,6 @@ router.post("/", async (req, res) => {
       min_salary,
       max_salary,
       description,
-      requirements,
-      responsibilities,
       deadline,
     } = req.body;
 
@@ -72,28 +77,26 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const [result] = await pool.query(
-      `INSERT INTO jobs 
-       (title, company, location, job_type, min_salary, max_salary, description, requirements, responsibilities, deadline)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    const result = await db.run(
+      `INSERT INTO jobs
+       (title, company, location, job_type, min_salary, max_salary, description, deadline)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         title,
         company,
         location,
         job_type,
-        min_salary || null,
-        max_salary || null,
-        description || null,
-        requirements || null,
-        responsibilities || null,
-        deadline || null,
+        min_salary ?? null,
+        max_salary ?? null,
+        description ?? null,
+        deadline ?? null,
       ]
     );
 
-    const [rows] = await pool.query("SELECT * FROM jobs WHERE id = ?", [
-      result.insertId,
+    const newJob = await db.get("SELECT * FROM jobs WHERE id = ?", [
+      result.lastID,
     ]);
-    res.status(201).json(rows[0]);
+    res.status(201).json(newJob);
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: "Failed to create job" });
